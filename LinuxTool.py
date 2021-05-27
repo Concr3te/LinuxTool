@@ -39,7 +39,7 @@ from PyQt5.QtWidgets import QFormLayout
 from PyQt5.QtWidgets import QCheckBox
 from PyQt5.QtWidgets import QTableWidgetItem
 from PyQt5.QtWidgets import QStyledItemDelegate
-from PyQt5.QtCore import QSize, QEvent
+from PyQt5.QtCore import QSize, QEvent, QThread
 from PyQt5.QtCore import pyqtSlot
 from PyQt5.QtWidgets import QFileDialog
 from PyQt5 import QtGui
@@ -354,11 +354,11 @@ class LinuxTool(QMainWindow):
 
         self.ConfigImport = QPushButton("&Import Configuration", self.overviewTab)
         self.ConfigImport.setGeometry(50, 400, 200, 25)
-        self.ConfigImport.clicked.connect(self.ImportConfigFile)
+        self.ConfigImport.clicked.connect(self.ImportConfigFiles)
 
         self.ConfigExport = QPushButton("&Export Configuration", self.overviewTab)
         self.ConfigExport.setGeometry(50, 500, 200, 25)
-        self.ConfigExport.clicked.connect(self.ExportConfigFile)
+        self.ConfigExport.clicked.connect(self.ExportConfigFiles)
 
         #resources tab
         self.CPULoadValues = []
@@ -419,9 +419,10 @@ class LinuxTool(QMainWindow):
         self.EmailNotificationCheckBox = QCheckBox(self.emailTab)
         self.EmailNotificationCheckBox.setGeometry(250, 400, 100, 25)
 
-        self.SaveEmailSettings = QPushButton(self.emailTab)
-        self.SaveEmailSettings.setText("Save Settings")
-        self.SaveEmailSettings.setGeometry(50, 500, 100, 25)
+        self.SaveEmailSettingsButton = QPushButton(self.emailTab)
+        self.SaveEmailSettingsButton.setText("Save Settings")
+        self.SaveEmailSettingsButton.setGeometry(50, 500, 100, 25)
+        self.SaveEmailSettingsButton.clicked.connect(self.SaveEmailSettings)
 
         #services
         self.ChangePasswordLabel = QLabel("Change Password", self.servicesTab)
@@ -470,14 +471,28 @@ class LinuxTool(QMainWindow):
         self.DisableShellAccessLabel.setGeometry(50, 310, 300, 25)
         self.DisableShellAccessButton = QPushButton("Disable Shell", self.servicesTab)
         self.DisableShellAccessButton.setGeometry(50, 350, 200, 25)
-        self.DisableShellAccessButton.clicked.connect(self.DisableShellAccessNow)
+        self.DisableShellAccessButton.clicked.connect(self.ShellAccessAction)
+
+        self.FactoryResetLabel = QLabel("Factory Reset", self.servicesTab)
+        self.FactoryResetLabel.setGeometry(400, 310, 300, 25)
+        self.FactoryResetButton = QPushButton("Factory Reset", self.servicesTab)
+        self.FactoryResetButton.setGeometry(400, 350, 200, 25)
+        self.FactoryResetButton.clicked.connect(self.FactoryResetAction)
 
         self.ChangeFilesOwnershipLabel = QLabel("Change Program files ownership", self.servicesTab)
         self.ChangeFilesOwnershipLabel.setGeometry(50, 400, 300, 25)
         self.ChangeFilesOwnershipButton = QPushButton("&Change Ownership", self.servicesTab)
         self.ChangeFilesOwnershipButton.setGeometry(50, 450, 200, 25)
-        #self.ChangeFilesOwnershipButton.setColor(Qt.Red)
         self.ChangeFilesOwnershipButton.clicked.connect(self.ChangeFilesOwnerShip)
+
+        self.LetsEncryptLabel = QLabel("Let's Encrypt", self.servicesTab)
+        self.LetsEncryptLabel.setGeometry(400, 400, 100, 25)
+        self.LetsEncryptButton = QPushButton("Let's Encrypt", self.servicesTab)
+        self.LetsEncryptButton.setGeometry(400, 450, 100, 25)
+        self.LetsEncryptButton.clicked.connect(self.LetsEncrypt)
+
+        self.LetsEncryptDomain = QLineEdit()
+        self.LetsEncryptDomain.setGeometry(500, 450, 100, 25)
 
         #logs
         self.LiveLog = QPlainTextEdit(self.logsTab)
@@ -586,7 +601,77 @@ class LinuxTool(QMainWindow):
         self.IpHostName = QLineEdit(self.networkTab)
         self.IpHostName.setReadOnly(True)
         self.IpHostName.setGeometry(550, 450, 200, 25)
-        #about
+
+    def LetsEncrypt():
+        pass
+
+    def FactoryResetAction(self):
+        # Flush all Iptables rules
+        os.system("iptables -P INPUT ACCEPT")
+        os.system("iptables -P FORWARD ACCEPT")
+        os.system("iptables -P OUTPUT ACCEPT")
+        os.system("iptables -F")
+        os.system("iptables -X")
+        os.system("iptables -Z ")
+        os.system("iptables -t nat -F")
+        os.system("iptables -t nat -X")
+        os.system("iptables -t mangle -F")
+        os.system("iptables -t mangle -X")
+        os.system("iptables iptables -t raw -F")
+        os.system("iptables -t raw -X")
+        os.system("iptables -P INPUT ACCEPT")
+        os.system("iptables -P FORWARD ACCEPT")
+        os.system("iptables -P OUTPUT ACCEPT")
+        os.system("iptables -F")
+        os.system("iptables -X")
+        os.system("iptables -Z ")
+        os.system("iptables -t nat -F")
+        os.system("iptables -t nat -X")
+        os.system("iptables -t mangle -F")
+        os.system("iptables -t mangle -X")
+        os.system("iptables iptables -t raw -F")
+        os.system("iptables -t raw -X")
+
+        os.system("ip6tables -P INPUT ACCEPT")
+        os.system("ip6tables -P FORWARD ACCEPT")
+        os.system("ip6tables -P OUTPUT ACCEPT")
+        os.system("ip6tables -F")
+        os.system("ip6tables -X")
+        os.system("ip6tables -Z ")
+        os.system("ip6tables -t nat -F")
+        os.system("ip6tables -t nat -X")
+        os.system("ip6tables -t mangle -F")
+        os.system("ip6tables -t mangle -X")
+        os.system("ip6tables iptables -t raw -F")
+        os.system("ip6tables -t raw -X")
+        os.system("ip6tables -P INPUT ACCEPT")
+        os.system("ip6tables -P FORWARD ACCEPT")
+        os.system("ip6tables -P OUTPUT ACCEPT")
+        os.system("ip6tables -F")
+        os.system("ip6tables -X")
+        os.system("ip6tables -Z ")
+        os.system("ip6tables -t nat -F")
+        os.system("ip6tables -t nat -X")
+        os.system("ip6tables -t mangle -F")
+        os.system("ip6tables -t mangle -X")
+        os.system("ip6tables iptables -t raw -F")
+        os.system("ip6tables -t raw -X")
+
+        #drop all databases except users
+
+        con = sqlite3.connect(appdir + "/database.db")
+        cursor = con.cursor()
+        query = "DROP IF EXISTS locked"
+        cursor.execute(query)
+        query = "DROP IF EXISTS email"
+        cursor.execute(query)
+
+        con.close()
+
+        self.UpdatesDefault()
+
+        self.LiveLog.appendPlainText("The application has been reset\n")
+
     def GetConnections(self):
         os.system("ss -taun > connections.txt")
         connections = []
@@ -788,7 +873,7 @@ class LinuxTool(QMainWindow):
         text = "{time} Checked for updates \n".format(time=curr_clock)
         self.LiveLog.appendPlainText(text)
 
-    def DisableShellAccessNow(self):
+    def ShellAccessAction(self):
         pass
 
     def RemoveIPFromBan(self):
@@ -966,10 +1051,32 @@ class LinuxTool(QMainWindow):
         pass
 
     def ChangePassword(self):
-        pass
+        username = self.InputUserNameEdit.text()
+        old_password = self.InputOldPasswordEdit.text()
+        new_password = self.InputNewPasswordEdit.text()
 
     def SaveEmailSettings(self):
-        pass
+        sender_email = self.SenderEmailEdit.text()
+        sender_pass = self.SenderPasswordEdit.text()
+        smtp_server = self.SMTPServerEdit.text()
+        smtp_port = self.SMTPPortEdit.text()
+        recepient_email = self.RecieverEmailEdit.text() 
+        notifications_receive = self.EmailNotificationCheckBox.checkState()
+
+        conn = sqlite3.connect(appdir +"/database.db")
+        cursor = conn.cursor()
+        drop_existing = "DROP IF EXISTS email"
+        cursor.execute(drop_existing)
+        create_new = "CREATE TABLE email(sender_email, sender_pass, smtp_server, smtp_port, recipient_email, notifications_receive)"
+        cursor.execute(create_new)
+
+        save_values = 'INSERT INTO email(sender_email, sender_pass, smtp_server, smtp_port, recipient_email, notifications_receive) VALUES ("{sender_email}", "{sender_pass}", "{smtp_server}", "{smtp_port}", "{recipient_email}", "{notifications_receive}"'.format(sender_email=sender_email, sender_pass=sender_pass, smtp_server=smtp_server, recipient_email=recipient_email, notifications_receive=notifications_receive)
+
+        cursor.execute(save_values)
+
+        self.LiveLog.appendPlainText("Updated email database to the indicated values")
+
+        conn.close()
 
     def apt_install(self, pkgs):
         cmd = ['pkexec', 'apt-get', 'install', '-y'] + pkgs
@@ -983,31 +1090,27 @@ class LinuxTool(QMainWindow):
                 )
         result.check_returncode()
 
-    def accept_eula():
+    def accept_eula(self):
         cmd = 'echo msttcorefonts msttcorefonts/{}-mscorefonts-eula {} | pkexec debconf-set-selections'
         run(cmd.format("present", "note ''"), stdout=sys.stdout, stderr=sys.stderr, shell=True)
         run(cmd.format("accepted", "select true"), stdout=sys.stdout, stderr=sys.stderr, shell=True)
 
     def UpdatePackage(self, package):
         # testing with configured licenses, one simple and one complicated package
-        accept_eula()
-        apt_install([package])
+        self.accept_eula()
+        self.apt_install([package])
 
     def UpdateSelectedPackages(self):
         selected = self.PossibleUpdates.selectionModel()
 
         status = selected.hasSelection()
 
-        print(selected)
-
         model = self.PossibleUpdates.model()
 
         if status:
             selection = selected.selectedIndexes()
             for item in selection:
-                #index = model.index(column, 0)
-                print(item.data())
-                #self.UpdatePackage(
+                self.UpdatePackage(item.data())
 
 
     def UpdateResourcesTab(self):
@@ -1051,25 +1154,63 @@ class LinuxTool(QMainWindow):
         else:
             return "Enable"
 
-    def ImportConfigFile(self):
-        filename = QFileDialog.getOpenFileName(self, "Config File")
-        #self.myTextBox.setText(filename)
-        print(filename)
+    def ImportConfigFiles(self):
+        filedialog = QFileDialog()
+        filedialog.setFileMode(QFileDialog.DirectoryOnly);
+        filedialog.exec()
+        directory = filedialog.getExistingDirectory()
 
-    def ExportConfigFile(self):
-        filename = QFileDialog.getSaveFileName(self, "Save File")
-        print(filename)
+        #restore iptables save
+        iptables_restore = "iptables-restore --f"+ directory + "/iptables.save"
+        os.system(iptables_restore)
+        print(directory)
+
+    def ExportConfigFiles(self):
+        filedialog = QFileDialog()
+        filedialog.setFileMode(QFileDialog.DirectoryOnly);
+        filedialog.exec()
+        directory = filedialog.getExistingDirectory()
+
+        iptables_save = "iptables-save "+ directory +"/iptables.save"
+        os.system(iptables_save)
+
+        import pandas as pd
+
+        conn = sqlite3.connect(appdir+"/database.db", isolation_level=None,
+                       detect_types=sqlite3.PARSE_COLNAMES)
+        db_df = pd.read_sql_query("SELECT * FROM locked", conn)
+        filename = directory + "/locked.csv"
+        db_df.to_csv(filename, index=False)
+
+        filename = directory + "/email.csv"
+        db_df = pd.read_sql_query("SELECT * FROM email", conn)
+        db_df.to_csv(filename, index=False)
+
+        filename = directory + "/users.csv"
+        db_df = pd.read_sql_query("SELECT * FROM users", conn)
+        db_df.to_csv(filename, index=False)
 
     def SendEmail():
-        port = 465  # For SSL
-        smtp_server = "smtp.gmail.com"
-        sender_email = "k.kahurani@gmail.com"  # Enter your address
-        receiver_email = "k.kahurani@gmail.com"  # Enter receiver address
-        password = "Humble()Giant06"
-        message = """\
-                Subject: Hi there
+        line
+        with open("trigger.log") as f:
+            line = f.readline()
 
-                This message is sent from Python."""
+        if not line:
+            return
+
+        sqlite3.connect(appdir +"/database.db")
+        con = sqlite3.connect(self.appdir + "/database.db")
+        cursor = con.cursor()
+        query = "SELECT * FROM email"
+        cursor.execute(query)
+        email_variables = cursor.fetchall()
+
+        sender_email =  email_variables[0]
+        sender_password = email_variables[1]
+        smtp_server =  email_variables[2]
+        port = email_variables[3]
+        receiver_email = email_variables[4]
+        message = line
 
         context = ssl.create_default_context()
 
@@ -1129,7 +1270,9 @@ class LinuxTool(QMainWindow):
         alphabet = string.ascii_letters + string.digits
         password = ''.join(secrets.choice(alphabet) for i in range(20))
 
-        return password
+        self.InputNewPasswordEdit.setText(password)
+
+        self.InputNewPasswordEdit.setEchoMode(QLineEdit.Normal)
 
     def DisableShellAccess(self, username):
         test = subprocess.Popen(["usermod","-s","/sbin/nologin", username], stdout=subprocess.PIPE)
