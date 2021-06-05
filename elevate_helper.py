@@ -5,7 +5,6 @@ import os
 import sqlite3
 import binascii
 import hashlib
-import subprocess
 
 def is_root():
     return os.getuid() == 0
@@ -43,28 +42,39 @@ def CreateUser(appdir):
     root = is_root()
 
     if root:
-        variables = GetVariables() 
-        venvdir = variables[0] +"/.venv"
-
-        with open("/etc/rsyslog.d/20-ufw.conf", "w") as f:
-            f.write(':msg,contains,"[netfilter] " -/var/log/iptables.log')
-            f.write("& stop")
-            f.close()
-            os.system("systemctl restart rsyslog")
-
         os.environ["DISPLAY"] = ":0"
-        # under the virtualenv /path/to/virtualenv/
-        python_bin = venvdir + "/bin/python3"
-        # Path to the script that must run under the virtualenv
-        script_file = variables[1] + "/elevate_helper.py"
-        script_file = os.path.abspath(script_file)
 
-        subprocess.Popen([python_bin, script_file])
+
+    root_ownership = "chown -R root:root " + appdir
+
+    os.system(root_ownership)
+
+    print(appdir)
+
+    con = sqlite3.connect(appdir + "/database.db")
+
+    cursor = con.cursor()
+    check_locked = "SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'".format(table_name="locked")
+    cursor.execute(check_locked)
+    result = cursor.fetchall()
+
+    if not result:
+        statement = "CREATE table locked (package);"
+        cursor.execute(statement)
+
+    app = QApplication(sys.argv)
+
+    Installer = LinuxInstaller(appdir)
+
+    Installer.show()
+
+    sys.exit(app.exec_())
 
 if __name__ == "__main__":
     appdir = GetVariables()
     root = is_root()
     if not root:
         os.system("xhost +")
-    elevate.elevate()
-    CreateUser(appdir)
+    print(appdir)
+    #elevate.elevate()
+    CreateUser(appdir[0])

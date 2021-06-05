@@ -2,7 +2,7 @@
 Name=Linux Tool
 GenericName=Linux Tool App
 Comment=Configure your Linux computer
-Exec=/home/monroe/.LinuxTool/LinuxTool.py
+Exec=filepath
 Terminal=false
 Type=Application
 Keywords=Linux;Security;

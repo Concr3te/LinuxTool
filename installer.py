@@ -4,6 +4,8 @@ import os
 import sys
 import os.path
 import getpass
+import subprocess
+from shutil import copyfile
 
 def install():
     homedir = os.path.expanduser("~")
@@ -11,34 +13,34 @@ def install():
     appdir = homedir + "/.LinuxTool"
     venvdir = appdir + "/.venv"
 
-    print(homedir)
-    print(appdir)
+    installed = os.path.exists(appdir)
+    print(installed)
 
-    if os.path.exists(appdir):
-        print("Application already installed\n")
-        return
-    else:
-        os.mkdir(appdir)
-    if os.path.exists(appdir + "/.venv"):
-        print("Application already installed\n")
-        return
-    else:
-        print("Application not already installed\n")
+    if not installed:
         os.system("mkdir "+ appdir)
         os.system("virtualenv "+ venvdir)
-        #builder = EnvBuilder()
-        #builder.create(venvdir)
-    pip_path = venvdir + "/bin/pip"
-    import subprocess
+        copyfile("./LinuxTool.py", appdir + "/LinuxTool.py")
+        os.system("chmod +x " + appdir + "/LinuxTool.py")
+        copyfile("./database.db", appdir + "/new.db")
+        copyfile("./getssl.sh", appdir + "/getssl.sh")
+        copyfile("./ElevatedScript.py", appdir + "/ElevatedScript.py")
+        os.system("chmod +x " + appdir + "/getssl.sh")
+        copyfile("./LinuxTool.desktop", appdir + "/LinuxTool.desktop")
+        python_path = venvdir + "/bin/activate"
+        command = ". "+ python_path
+        os.system(command)
+        install_python_apt = "cp -r python3-apt/usr/lib/python3/dist-packages/* " + venvdir + "/lib/python3.8/site-packages"
+        install_python_dbus = "cp -r python3-dbus/usr/lib/python3/dist-packages/* " + venvdir + "/lib/python3.8/site-packages"
+        os.system(install_python_apt)
+        os.system(install_python_dbus)
+        pip_path = venvdir + "/bin/pip"
+        os.system(pip_path + " install -r requirements.txt")
 
-    # Path to a Python interpreter that runs any Python script
-    # under the virtualenv /path/to/virtualenv/
+
     python_bin = venvdir + "/bin/python3"
-    # Path to the script that must run under the virtualenv
-    script_file = "./install_packages.py"
-
+    script_file = "./create_user.py"
+    script_file = os.path.abspath(script_file)
     subprocess.Popen([python_bin, script_file])
-
 
 if __name__ == "__main__":
     install()
