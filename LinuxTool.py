@@ -36,11 +36,9 @@ def GetVariables():
 if __name__ == "__main__":
     variables = GetVariables()
 
-    print(variables)
-
     venvdir = variables[0] + "/.venv"
 
-    python_bin = venvdir + "/bin/python3"
+    python_bin = "python3"
     script_file = variables[0] + "/ElevatedScript.py"
     script_file = os.path.abspath(script_file)
     subprocess.Popen([python_bin, script_file])

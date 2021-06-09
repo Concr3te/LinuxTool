@@ -277,8 +277,6 @@ class LinuxTool(QMainWindow):
         conn = sqlite3.connect(self.appdir + "/database.db")
         cur = conn.cursor()
         query = 'SELECT password from login WHERE username = "{username}"'.format(username=username)
-        with open("logfile.txt", "w") as f:
-            f.write(query)
         cur.execute(query)
         thispassword = cur.fetchall()
         stored_password = thispassword[0][0]
@@ -367,7 +365,6 @@ class LinuxTool(QMainWindow):
         text = """
                 
                This application was developed by 
-                        David Kiarie.
 
                """
 
@@ -615,7 +612,17 @@ class LinuxTool(QMainWindow):
         self.LiveLog = QPlainTextEdit(self.logsTab)
         self.LiveLog.setGeometry(10, 10, 750, 600)
         self.LiveLog.setReadOnly(True)
-        #self.LiveLog.appendPlainText("Log")
+
+        try:
+            with open(self.appdir + "/logfile.txt", "r") as f:
+                lines = f.readlines()
+
+                for line in lines:
+                    line = line.replace('\n', '')
+                    if line:
+                       self.LiveLog.appendPlainText(line)
+        except FileNotFoundError:
+            pass
 
         #connections
         self.CurrentConnectionsLabel = ["Netid", "Connection State", "Local Port/A#ddress", "Peer IP/Port", "Peer Country"]
@@ -633,6 +640,7 @@ class LinuxTool(QMainWindow):
 
         self.CheckForUpdates = QPushButton("&Lock/Unlock", self.updatesTab)
         self.CheckForUpdates.setGeometry(350, 50, 100, 25)
+        self.CheckForUpdates.clicked.connect(self.LockUnLockPackage)
 
         self.UpdatePackages = QPushButton("&Update", self.updatesTab)
         self.UpdatePackages.setGeometry(150, 50, 100, 25)
@@ -724,6 +732,7 @@ class LinuxTool(QMainWindow):
         self.IpHostName = QLineEdit(self.networkTab)
         self.IpHostName.setReadOnly(True)
         self.IpHostName.setGeometry(550, 450, 200, 25)
+        self.SetShellAction()
         
     def GetNetworkInterfaces(self):
         ifaces = []
@@ -831,8 +840,10 @@ class LinuxTool(QMainWindow):
 
         self.SetFTPPort(21)
         self.EnableFTP()
-        self.SetSSHPort(22)
+        ssh_port = self.GetSSHPort()
+        self.SetSSHPort(22, ssh_port)
         self.EnableSSH()
+        self.EnableShellAccess("root")
 
         #drop all databases except users
         con = sqlite3.connect(self.appdir + "/database.db")
@@ -859,11 +870,10 @@ class LinuxTool(QMainWindow):
 
         self.UpdatesDefault()
 
-        text = "{time} The application has been reset \n".format(time=datetime.datetime.now())
+        text = "{time} The application has been reset ".format(time=datetime.datetime.now())
         self.LiveLog.appendPlainText(text)
 
     def GetConnections(self):
-        print(self.appdir)
         os.system("ss -taun > " + self.appdir + "/connections.txt")
         connections = []
         with open(self.appdir + "/connections.txt") as connections_file:
@@ -933,6 +943,37 @@ class LinuxTool(QMainWindow):
             return "N/A"
         else:
             return status
+
+    def LockUnLockPackage(self):
+        selected = self.PossibleUpdates.selectionModel()
+
+        status = selected.hasSelection()
+
+        model = self.PossibleUpdates.model()
+
+        if status:
+            selection = selected.selectedIndexes()
+            for item in selection:
+                package = item.data()
+                text = "{time} locked package {package}".format(time=datetime.datetime.now(), package=package)
+                con = sqlite3.connect(self.appdir + "/database.db")
+
+                cur = con.cursor()
+
+                check_status = 'SELECT * from locked WHERE package = "{package}"'.format(package=package)
+
+                cur.execute(check_status)
+
+                status = cur.fetchall()
+
+                if status:
+                    unlock_package = 'DELETE FROM locked WHERE package = "{package}"'.format(package=package)
+                    cur.execute(unlock_package)
+                    con.commit()
+                else:
+                    lock_package = 'INSERT INTO locked (package) VALUES ("{package}")'.format(package=package)
+                    cur.execute(lock_package)
+                    con.commit()
 
     def IsLocked(self, package):
         con = sqlite3.connect(self.appdir + "/database.db")
@@ -1054,7 +1095,7 @@ class LinuxTool(QMainWindow):
                 for column in range(len(packages[0])):
                     self.PossibleUpdates.setItem(row, column, QTableWidgetItem((packages[row][column])))
 
-        text = "{time} Checked for updates \n".format(time=datetime.datetime.now())
+        text = "{time} Checked for updates ".format(time=datetime.datetime.now())
         self.LiveLog.appendPlainText(text)
 
     def RemoveIPFromBan(self):
@@ -1065,7 +1106,7 @@ class LinuxTool(QMainWindow):
 
         os.system(rule)
 
-        text = "{time} Whitelisted IP: {ip} \n".format(time = datetime.datetime.now(), ip = int(self.WhiteListIpEdit.text()))
+        text = "{time} Whitelisted IP: {ip} ".format(time = datetime.datetime.now(), ip = int(self.WhiteListIpEdit.text()))
         self.LiveLog.appendPlainText(text)
 
     def ApplyServiceFilterNow(self):
@@ -1075,7 +1116,7 @@ class LinuxTool(QMainWindow):
         try:
             port = int(self.SSHAndFTPPortEdit.text())
         except ValueError:
-            self.LiveLog.appendPlainText("Please enter a valid port number \n")
+            self.LiveLog.appendPlainText("Please enter a valid port number ")
 
         if service == 0:
             rule = "iptables -A INPUT -p tcp -m tcp --dport {port} -m state --state NEW -m recent --update --second {time} --hitcount {hits} --name DEFAULT --rsource -j LOG --log-prefix='[netfilter] '".format(port=int(self.GetFTPPort()), time=int(self.AttemptsDuration.text()), hits=int(self.AttemptsCount.text()))
@@ -1085,10 +1126,10 @@ class LinuxTool(QMainWindow):
             os.system(rule)
 
         if service == 0:
-           text = "{time} Filtering packets to and from port {port} \n".format(time= datetime.datetime.now(), port=int(self.GetFTPPort()))
+           text = "{time} Filtering packets to and from port {port} ".format(time= datetime.datetime.now(), port=int(self.GetFTPPort()))
            self.LiveLog.appendPlainText(text)
         if service == 1:
-           text = "Filtering packets to and from port {port} \n".format(time= datetime.datetime.now(), port=int(self.GetFTPPort()))
+           text = "Filtering packets to and from port {port} ".format(time= datetime.datetime.now(), port=int(self.GetFTPPort()))
            self.LiveLog.appendPlainText(text)
 
     def BanCountries(self):
@@ -1107,10 +1148,10 @@ class LinuxTool(QMainWindow):
             if country_code.isupper():
                 country_codes.append(country_code)
             if port:
-                text = "{time} Banned country {country_code} from {port}\n".format(time = datetime.datetime.now(), country_code=country, port=port)
+                text = "{time} Banned country {country_code} from {port}".format(time = datetime.datetime.now(), country_code=country, port=port)
                 self.LiveLog.appendPlainText(text)
             else:
-                text = "{time} Banned country {country_code} at ALL ports \n".format(time = datetime.datetime.now(), country_code=country)
+                text = "{time} Banned country {country_code} at ALL ports ".format(time = datetime.datetime.now(), country_code=country)
                 self.LiveLog.appendPlainText(text)
 
         if len(country_codes) > 0:
@@ -1120,7 +1161,6 @@ class LinuxTool(QMainWindow):
         #iptables -A
         con = sqlite3.connect(self.appdir + "/database.db")
         cursor = con.cursor()
-        print(country_code)
         for country in country_code:
             query = 'SELECT start_range, end_range FROM ipv4 WHERE country_code == "{code}"'.format(code=country)
             cursor.execute(query)
@@ -1129,8 +1169,7 @@ class LinuxTool(QMainWindow):
                 if port:
                     try:
                         #iptables -A INPUT -m iprange --src-range 2xx.3x.1xx.125-2xx.3x.1xx.225 -j DROP
-                        rule = 'iptables -A INPUT -m iprange --src-range {start}-{end} --dport {port} -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])), port=port)
-                        print(rule)
+                        rule = 'iptables -A INPUT -m iprange --src-range {start}-{end} -p tcp --dport {port} -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])), port=port)
                         os.system(rule)
                     except ValueError:
                         continue
@@ -1138,7 +1177,6 @@ class LinuxTool(QMainWindow):
                     try:
                         #iptables -A INPUT -m iprange --src-range 2xx.3x.1xx.125-2xx.3x.1xx.225 -j DROP
                         rule = 'iptables -A INPUT -m iprange --src-range {start}-{end} -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])))
-                        print(rule)
                         os.system(rule)
                     except ValueError:
                         continue
@@ -1150,8 +1188,7 @@ class LinuxTool(QMainWindow):
                 if port:
                     try:
                         #iptables -A INPUT -m iprange --src-range 2xx.3x.1xx.125-2xx.3x.1xx.225 -j DROP
-                        rule = 'iptables -A INPUT -m iprange --src-range {start}-{end} --dport -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])), port=port)
-                        print(rule)
+                        rule = 'iptables -A INPUT -m iprange --src-range {start}-{end} -p tcp --dport -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])), port=port)
                         os.system(rule)
                     except ValueError:
                         continue
@@ -1159,7 +1196,6 @@ class LinuxTool(QMainWindow):
                     try:
                         #iptables -A INPUT -m iprange --src-range 2xx.3x.1xx.125-2xx.3x.1xx.225 -j DROP --destination port 22
                         rule = 'iptables -A INPUT -m iprange --src-range {start}-{end} -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])))
-                        print(rule)
                         os.system(rule)
                     except ValueError:
                         continue
@@ -1179,10 +1215,10 @@ class LinuxTool(QMainWindow):
             country_code = country.split(",")[1]
             country_codes.append(country_code)
             if port:
-                text = "{time} UnBanned country {country_code} from {port}\n".format(time=datetime.datetime.now(), country_code=country, port=port)
+                text = "{time} UnBanned country {country_code} from {port}".format(time=datetime.datetime.now(), country_code=country, port=port)
                 self.LiveLog.appendPlainText(text)
             else:
-                text = "{time} UnBanned country {country_code} at ALL ports \n".format(time=datetime.datetime.now(), country_code=country)
+                text = "{time} UnBanned country {country_code} at ALL ports ".format(time=datetime.datetime.now(), country_code=country)
                 self.LiveLog.appendPlainText(text)
 
         if len(country_codes) > 0:
@@ -1200,14 +1236,14 @@ class LinuxTool(QMainWindow):
                 if port:
                     try:
                         #iptables -A INPUT -m iprange --src-range 2xx.3x.1xx.125-2xx.3x.1xx.225 -j DROP
-                        rule = 'iptables -D INPUT -m iprange --src-range {start}-{end} --destination-port {port} -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])), port=port)
+                        rule = 'iptables -D INPUT -m iprange --src-range {start}-{end} -p tcp --dport {port} -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])), port=port)
                         os.system(rule)
                     except ValueError:
                         continue
                 else:
                     try:
                         #iptables -A INPUT -m iprange --src-range 2xx.3x.1xx.125-2xx.3x.1xx.225 -j DROP
-                        rule = 'iptables -D INPUT -m iprange --src-range {start}-{end} --destination-port -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])))
+                        rule = 'iptables -D INPUT -m iprange --src-range {start}-{end} -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])))
                         os.system(rule)
                     except ValueError:
                         continue
@@ -1219,14 +1255,14 @@ class LinuxTool(QMainWindow):
                 if port:
                     try:
                         #iptables -A INPUT -m iprange --src-range 2xx.3x.1xx.125-2xx.3x.1xx.225 -j DROP
-                        rule = 'iptables -D INPUT -m iprange --src-range {start}-{end} --destination-port -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])), port=port)
+                        rule = 'iptables -D INPUT -m iprange --src-range {start}-{end} -p tcp --dport -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])), port=port)
                         os.system(rule)
                     except ValueError:
                         continue
                 else:
                     try:
                         #iptables -A INPUT -m iprange --src-range 2xx.3x.1xx.125-2xx.3x.1xx.225 -j DROP --destination port 22
-                        rule = 'iptables -D INPUT -m iprange --src-range {start}-{end} --destination-port {port} -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])))
+                        rule = 'iptables -D INPUT -m iprange --src-range {start}-{end} -j DROP'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])))
                         os.system(rule)
                     except ValueError:
                         continue
@@ -1252,10 +1288,10 @@ class LinuxTool(QMainWindow):
         for country in countries:
             country_code = country.split(",")[1]
             if port:
-                text = "{time} Rejecting all traffic except from {country_code} at {port}\n".format(time=datetime.datetime.now(), country_code=country, port=port)
+                text = "{time} Rejecting all traffic except from {country_code} at {port}".format(time=datetime.datetime.now(), country_code=country, port=port)
                 self.LiveLog.appendPlainText(text)
             else:
-                text = "{time} Rejecting all traffic except from {country_code} at ALL ports \n".format(time=datetime.datetime.now(), country_code=country)
+                text = "{time} Rejecting all traffic except from {country_code} at ALL ports ".format(time=datetime.datetime.now(), country_code=country)
                 self.LiveLog.appendPlainText(text)
 
             if country_code.isupper():
@@ -1267,16 +1303,13 @@ class LinuxTool(QMainWindow):
 
         for country_code in country_codes:
             query = 'SELECT start_range, end_range FROM ipv4 WHERE country_code == "{code}"'.format(code=country_code)
-            print(query)
             cursor.execute(query)
             ipv4rows = cursor.fetchall()
-            print(ipv4rows)
-            print(country_code)
             for row in ipv4rows:
                 if port:
                     try:
                         #iptables -A INPUT -m iprange --src-range 2xx.3x.1xx.125-2xx.3x.1xx.225 -j DROP
-                        rule = 'iptables -A INPUT -m iprange --src-range {start}-{end} --destination-port {port} -j ACCEPT'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])), port=port)
+                        rule = 'iptables -A INPUT -m iprange --src-range {start}-{end} -p tcp --dport {port} -j ACCEPT'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])), port=port)
                         os.system(rule)
                     except ValueError:
                         continue
@@ -1295,7 +1328,7 @@ class LinuxTool(QMainWindow):
                 if port:
                     try:
                         #iptables -A INPUT -m iprange --src-range 2xx.3x.1xx.125-2xx.3x.1xx.225 -j DROP
-                        rule = 'ip6tables -A INPUT -m iprange --src-range {start}-{end} -destination-port {port} -j ACCEPT'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])), port=port)
+                        rule = 'ip6tables -A INPUT -m iprange --src-range {start}-{end} --dport {port} -j ACCEPT'.format(start=ipaddress.IPv4Address(int(row[0])), end=ipaddress.IPv4Address(int(row[1])), port=port)
                         os.system(rule)
                     except ValueError:
                         continue
@@ -1317,8 +1350,7 @@ class LinuxTool(QMainWindow):
         if login:
             conn = sqlite3.connect(self.appdir + "/database.db")
             cur = conn.cursor()
-            statement = 'UPDATE login SET username "{new_username}" WHERE username = "{old_username}"'.format(new_username=self.InputUserNameCurrent.text(), old_username=self.InputUserNameCurrent.text())
-            print(statement)
+            statement = 'UPDATE login SET username = "{new_username}" WHERE username = "{old_username}"'.format(new_username=self.InputNewUserName.text(), old_username=self.InputUserNameCurrent.text())
             cur.execute(statement)
             conn.commit()
             conn.close()
@@ -1330,6 +1362,8 @@ class LinuxTool(QMainWindow):
         new_password = self.InputNewPasswordEdit.text()
 
         login = self.applogin(username, old_password)
+        conn = sqlite3.connect(self.appdir + "/database.db")
+        cursor = conn.cursor()
 
         if login:
             salt = hashlib.sha256(os.urandom(60)).hexdigest().encode('ascii')
@@ -1337,8 +1371,6 @@ class LinuxTool(QMainWindow):
                                 salt, 100000)
             pwdhash = binascii.hexlify(pwdhash)
             pwdhash = (salt + pwdhash).decode('ascii')
-            conn = sqlite3.connect(self.appdir + "./database.db")
-            cursor = conn.cursor()
             query = 'UPDATE login SET password ="{pwdhash}" WHERE username ="{username}"'.format(pwdhash=pwdhash,username=username)
             cursor.execute(query)
             conn.commit()
@@ -1380,7 +1412,6 @@ class LinuxTool(QMainWindow):
 
     def apt_install(self, pkgs):
         cmd = ['pkexec', 'apt-get', 'install', '-y'] + pkgs
-        print('Running command: {}'.format(' '.join(cmd)))
         result = run(
                 cmd,
                 stdout=sys.stdout,
@@ -1400,9 +1431,9 @@ class LinuxTool(QMainWindow):
 
         locked = self.IsLocked(package)
 
-        if locked:
-            text = "{time} Attempted to update a locked package : {package} \n".format(time=datetime.datetime.now(), package=package)
-            self.LiveLog.appendPlainText()
+        if locked == "Yes":
+            text = "{time} Attempted to update a locked package : {package} ".format(time=datetime.datetime.now(), package=package)
+            self.LiveLog.appendPlainText(text)
             return
         self.accept_eula()
         self.apt_install([package])
@@ -1491,8 +1522,6 @@ class LinuxTool(QMainWindow):
         create_new = "CREATE TABLE email(sender_email, sender_pass, smtp_server, smtp_port, recipient_email, notifications_receive)"
         cur.execute(create_new)
 
-        print(directory)
-
         if os.path.exists(directory + "/users.csv"):
             with open(directory +"/users.csv") as fin:
                 dr = csv.DictReader(fin)
@@ -1514,7 +1543,7 @@ class LinuxTool(QMainWindow):
                 cur.executemany("INSERT INTO email (sender_email, sender_pass, smtp_server, smtp_port, recipient_email, notifications_receive) VALUES(?,?,?,?,?,?)", to_db)
                 con.commit()
 
-        text = "{time} Imported Configuration \n".format(time=datetime.datetime.now())
+        text = "{time} Imported Configuration ".format(time=datetime.datetime.now())
         self.LiveLog.appendPlainText(text)
 
     def ExportConfigFiles(self):
@@ -1560,12 +1589,16 @@ class LinuxTool(QMainWindow):
             db_df = pd.read_sql_query("SELECT * FROM users", conn)
             db_df.to_csv(filename, index=False)
 
-        text = "{time} Exported Configuration \n".format(time=datetime.datetime.now())
+        text = "{time} Exported Configuration ".format(time=datetime.datetime.now())
         self.LiveLog.appendPlainText(text)
 
     def SendEmail(self):
-        with open("/var/log/iptables.log", "r") as f:
-            line = f.readline()
+
+        try:
+            with open("/var/log/iptables.log", "r") as f:
+                line = f.readline()
+        except FileNotFoundError:
+            return
 
         #nothing has been logged so far so good
         if not line:
@@ -1599,14 +1632,14 @@ class LinuxTool(QMainWindow):
         with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
             server.login(sender_email, sender_password)
             server.sendmail(sender_email, receiver_email, message)
-        text = "{time} Sent out an email after a failed brute force attempt \n".format(time=datetime.datetime.now())
+        text = "{time} Sent out an email after a failed brute force attempt ".format(time=datetime.datetime.now())
         self.LiveLog.appendPlainText(text)
 
     def UpdatesDefault(self):
         default_config = 'APT::Periodic::Update-Package-Lists "1"; \nAPT::Periodic::Unattended-Upgrade "1";'
         with open("/etc/apt/apt.conf.d/20auto-upgrades", "w+") as f:
             f.write(default_config)
-        text = "Set updates setting to default\n"
+        text = "Set updates setting to default"
         self.LiveLog.appendPlainText(text)
 
     def UpdateActionText(self):
@@ -1621,7 +1654,6 @@ class LinuxTool(QMainWindow):
         value = int()
         with open("/etc/apt/apt.conf.d/20auto-upgrades") as f:
             line = f.readline()
-            print(line)
             value = str(line.split(" ")[1][1])
             return value
 
@@ -1638,7 +1670,7 @@ class LinuxTool(QMainWindow):
         copymode(file_path, abs_path)
         remove(file_path)
         move(abs_path, file_path)
-        text = "{time} Enabled automatic updates \n".format(time=datetime.datetime.now())
+        text = "{time} Enabled automatic updates ".format(time=datetime.datetime.now())
         self.LiveLog.appendPlainText(text)
 
     def DisableUpdates(self):
@@ -1654,7 +1686,7 @@ class LinuxTool(QMainWindow):
         copymode(file_path, abs_path)
         remove(file_path)
         move(abs_path, file_path)
-        text = "{time} Disabled automatic updates \n".format(time=datetime.datetime.now())
+        text = "{time} Disabled automatic updates ".format(time=datetime.datetime.now())
         self.LiveLog.appendPlainText(text)
 
     def GeneratePassword(self):
@@ -1666,21 +1698,44 @@ class LinuxTool(QMainWindow):
         self.InputNewPasswordEdit.setEchoMode(QLineEdit.Normal)
 
     def GetShellAccessAction(self):
-        os.system("echo $SHELL > file.txt")
-        
-        with open("file.txt") as f:
+        os.system("echo $SHELL > " + self.appdir + "/file.txt")
+
+        #os.system("cat " + self.appdir + "/file.txt")
+        with open(self.appdir + "/file.txt") as f:
             line = f.readline()
-            os.remove("file.txt")
+            print(line)
+            #os.remove(self.appdir + "/file.txt")
+
+            if "bash" in line:
+                print("Shell Enabled")
 
             if "bash" in line:
                 return "Disable Shell Access"
             else:
                 return "Enable Shell Access"
 
-    def ShellAccessAction(self):
+    def SetShellAction(self):
         status = self.GetShellAccessAction()
 
         if "Enable" in status:
+            self.DisableShellAccessButton.setText("Enable")
+        else:
+            self.DisableShellAccessButton.setText("Disable")
+
+    def ShellAccessAction(self):
+        status = self.GetShellAccessAction()
+
+        conn = sqlite3.connect(self.appdir + "/database.db")
+
+        cursor = conn.cursor()
+
+        query = "SELECT * FROM shell"
+
+        cursor.execute(query)
+
+        result = cursor.fetchall()
+
+        if len(result) > 0:
             self.EnableShellAccess("root")
             self.DisableShellAccessButton.setText("Disable")
         else:
@@ -1688,15 +1743,36 @@ class LinuxTool(QMainWindow):
             self.DisableShellAccessButton.setText("Enable")
 
     def DisableShellAccess(self, username):
+        conn = sqlite3.connect(self.appdir + "/database.db")
+
+        cursor = conn.cursor()
+
+        query = 'INSERT INTO shell (status) Values ("True")'
+
+        cursor.execute(query)
+
+        conn.commit()
+
         test = subprocess.Popen(["usermod","-s","/sbin/nologin", username], stdout=subprocess.PIPE)
         output = test.communicate()[0]
-        text = "{time} Disabled shell access for user {username} \n".format(time=datetime.datetime.now(), username=username)
+
+        text = "{time} Disabled shell access for user {username} ".format(time=datetime.datetime.now(), username=username)
         self.LiveLog.appendPlainText(text)
 
     def EnableShellAccess(self, username):
+        conn = sqlite3.connect(self.appdir + "/database.db")
+
+        cursor = conn.cursor()
+
+        query = 'DELETE FROM shell WHERE status = "True"'
+
+        cursor.execute(query)
+
+        conn.commit()
+
         test = subprocess.Popen(["usermod","-s","/bin/bash", username], stdout=subprocess.PIPE)
         output = test.communicate()[0]
-        text = "{time} Enabled shell access for user {username} \n".format(time=datetime.datetime.now(), username=username)
+        text = "{time} Enabled shell access for user {username} ".format(time=datetime.datetime.now(), username=username)
         self.LiveLog.appendPlainText(text)
 
     def GetSSHStatus(self):
@@ -1776,7 +1852,7 @@ class LinuxTool(QMainWindow):
         manager = dbus.Interface(systemd1, 'org.freedesktop.systemd1.Manager')
         job = manager.RestartUnit('ssh.service', 'fail')
         self.OverviewSSHPort.setText(str(port))
-        text = "{time} Set SSH port to {port} with systemd \n".format(time=datetime.datetime.now(), port=port)
+        text = "{time} Set SSH port to {port} with systemd ".format(time=datetime.datetime.now(), port=port)
         self.LiveLog.appendPlainText(text)
 
     def SetFTPPort(self, port):
@@ -1803,15 +1879,22 @@ class LinuxTool(QMainWindow):
             move(abs_path, file_path)
         else:
             pattern = "listen_port="+str(port)
-            with open(file_path, "a+") as old_file:
-                old_file.write(pattern)
+            with fdopen(fh, "w") as new_file:
+                with open(file_path) as old_file:
+                    for line in old_file:
+                        if pattern in line:
+                           new_file.write(line.replace(pattern, substr))
+                        new_file.write(line)
+            copymode(file_path, abs_path)
+            remove(file_path)
+            move(abs_path, file_path)
 
         sysbus = dbus.SystemBus()
         systemd1 = sysbus.get_object('org.freedesktop.systemd1', '/org/freedesktop/systemd1')
         manager = dbus.Interface(systemd1, 'org.freedesktop.systemd1.Manager')
-        job = manager.RestartUnit('vsftp.service', 'fail')
+        job = manager.RestartUnit('vsftpd.service', 'fail')
         self.OverviewFTPPort.setText(str(port))
-        text = "{time} Set FTP port to {port} with systemd \n".format(time=datetime.datetime.now(), port=port)
+        text = "{time} Set FTP port to {port} with systemd ".format(time=datetime.datetime.now(), port=port)
         self.LiveLog.appendPlainText(text)
 
     def SSHAction(self):
@@ -1840,7 +1923,7 @@ class LinuxTool(QMainWindow):
         manager.DisableUnitFiles(['ssh.service'], False)
         manager.Reload()
         #job = manager.RestartUnit('ssh.service', 'fail')
-        text = "{time} Disabled SSH with systemd \n".format(time=datetime.datetime.now())
+        text = "{time} Disabled SSH with systemd ".format(time=datetime.datetime.now())
         self.LiveLog.appendPlainText(text)
 
     def EnableSSH(self):
@@ -1850,7 +1933,7 @@ class LinuxTool(QMainWindow):
         manager.EnableUnitFiles(['ssh.service'], False, True)
         manager.Reload()
         job = manager.RestartUnit('ssh.service', 'fail')
-        text = "{time} Enabled SSH with systemd \n".format(time=datetime.datetime.now())
+        text = "{time} Enabled SSH with systemd ".format(time=datetime.datetime.now())
         self.LiveLog.appendPlainText(text)
 
     def FTPAction(self):
@@ -1879,7 +1962,7 @@ class LinuxTool(QMainWindow):
         manager.DisableUnitFiles(['vsftpd.service'], False)
         manager.Reload()
         #job = manager.RestartUnit('ssh.service', 'fail')
-        text = "{time} Disabled FTP with systemd \n".format(time=datetime.datetime.now())
+        text = "{time} Disabled FTP with systemd ".format(time=datetime.datetime.now())
         self.LiveLog.appendPlainText(text)
 
     def EnableFTP(self):
@@ -1889,7 +1972,7 @@ class LinuxTool(QMainWindow):
         manager.EnableUnitFiles(['vsftpd.service'], False, True)
         manager.Reload()
         job = manager.RestartUnit('vsftpd.service', 'fail')
-        text = "{time} Enabled FTP with systemd \n".format(time=datetime.datetime.now())
+        text = "{time} Enabled FTP with systemd ".format(time=datetime.datetime.now())
         self.LiveLog.appendPlainText(text)
 
     def WhoisIP(self):
@@ -1920,7 +2003,7 @@ class LinuxTool(QMainWindow):
         else:
             self.CountryFrom.setText("null")
 
-        text = "{time} Performed IP lookup from ipinfo.io for IP ".format(time=datetime.datetime.now()) + self.WhoisIpEdit.text() + "\n"
+        text = "{time} Performed IP lookup from ipinfo.io for IP ".format(time=datetime.datetime.now()) + self.WhoisIpEdit.text() + ""
         self.LiveLog.appendPlainText(text)
 
     def ApplySSHAndFTPChanges(self):
@@ -1929,17 +2012,30 @@ class LinuxTool(QMainWindow):
         try:
             port = int(self.SSHAndFTPPortEdit.text())
         except ValueError:
-            self.LiveLog.appendPlainText("Please enter a valid port number \n")
+            self.LiveLog.appendPlainText("Please enter a valid port number ")
 
         if service == 0:
-            print(int(self.SSHAndFTPPortEdit.text()))
             self.SetSSHPort(int(self.SSHAndFTPPortEdit.text()), self.GetSSHPort())
-            text = "Set SSH port to " + self.SSHAndFTPPortEdit.text() + "\n"
+            text = "Set SSH port to " + self.SSHAndFTPPortEdit.text() + ""
             self.LiveLog.appendPlainText(text)
         elif service == 1:
             self.SetFTPPort(int(self.SSHAndFTPPortEdit.text()))
-            text = "Set FTPd port to " + self.SSHAndFTPPortEdit.text() + "\n"
+            text = "Set FTPd port to " + self.SSHAndFTPPortEdit.text() + ""
             self.LiveLog.appendPlainText(text)
+      
+    def SaveLog(self):
+        log = os.path.exists(self.appdir + "/logfile.txt")
+
+        if log:
+            os.truncate(self.appdir + "/logfile.txt", 0)
+
+        with open(self.appdir + "/logfile.txt", "w") as f:
+
+            try:
+                text = self.LiveLog.toPlainText()
+                f.write(text)
+            except AttributeError:
+                pass
 
 
 def is_root():
@@ -1955,20 +2051,26 @@ def GetVariables():
 
     variables = []
     working_dir = ""
+    display = ""
 
     if not root:
         with open("/tmp/variables.txt", "w+") as f:
             f.write(appdir)
             f.write("\n")
             f.write(os.path.abspath("."))
+            f.write("\n")
+            f.write(os.environ['DISPLAY'])
     else:
         with open("/tmp/variables.txt","r") as appdir_file:
             appdir = appdir_file.readline()
             appdir = appdir.rstrip()
             working_dir = appdir_file.readline()
+            working_dir = working_dir.rstrip()
+            display = appdir_file.readline()
             #os.remove("/tmp/user.txt")
     variables.append(appdir)
     variables.append(working_dir)
+    variables.append(display)
     return variables
 
 if __name__ == "__main__":
@@ -1981,12 +2083,12 @@ if __name__ == "__main__":
     elevate.elevate()
 
     if root:
-        os.environ["DISPLAY"] = ":0"
+        os.environ["DISPLAY"] = variables[2]
 
     app = QApplication(sys.argv)
 
     mainWindow = LinuxTool(variables[0])
-    #mainWindow.SetupUI()
+    app.lastWindowClosed.connect(mainWindow.SaveLog)
     mainWindow.show()
 
     sys.exit(app.exec_())
